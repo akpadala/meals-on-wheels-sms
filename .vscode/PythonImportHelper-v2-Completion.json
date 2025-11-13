@@ -1,0 +1,180 @@
+[
+    {
+        "label": "FastAPI",
+        "importPath": "fastapi",
+        "description": "fastapi",
+        "isExtraImport": true,
+        "detail": "fastapi",
+        "documentation": {}
+    },
+    {
+        "label": "HTTPException",
+        "importPath": "fastapi",
+        "description": "fastapi",
+        "isExtraImport": true,
+        "detail": "fastapi",
+        "documentation": {}
+    },
+    {
+        "label": "CORSMiddleware",
+        "importPath": "fastapi.middleware.cors",
+        "description": "fastapi.middleware.cors",
+        "isExtraImport": true,
+        "detail": "fastapi.middleware.cors",
+        "documentation": {}
+    },
+    {
+        "label": "BaseModel",
+        "importPath": "pydantic",
+        "description": "pydantic",
+        "isExtraImport": true,
+        "detail": "pydantic",
+        "documentation": {}
+    },
+    {
+        "label": "Field",
+        "importPath": "pydantic",
+        "description": "pydantic",
+        "isExtraImport": true,
+        "detail": "pydantic",
+        "documentation": {}
+    },
+    {
+        "label": "Optional",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Dict",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "Any",
+        "importPath": "typing",
+        "description": "typing",
+        "isExtraImport": true,
+        "detail": "typing",
+        "documentation": {}
+    },
+    {
+        "label": "gspread",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "gspread",
+        "description": "gspread",
+        "detail": "gspread",
+        "documentation": {}
+    },
+    {
+        "label": "Credentials",
+        "importPath": "google.oauth2.service_account",
+        "description": "google.oauth2.service_account",
+        "isExtraImport": true,
+        "detail": "google.oauth2.service_account",
+        "documentation": {}
+    },
+    {
+        "label": "datetime",
+        "importPath": "datetime",
+        "description": "datetime",
+        "isExtraImport": true,
+        "detail": "datetime",
+        "documentation": {}
+    },
+    {
+        "label": "os",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "os",
+        "description": "os",
+        "detail": "os",
+        "documentation": {}
+    },
+    {
+        "label": "json",
+        "kind": 6,
+        "isExtraImport": true,
+        "importPath": "json",
+        "description": "json",
+        "detail": "json",
+        "documentation": {}
+    },
+    {
+        "label": "load_dotenv",
+        "importPath": "dotenv",
+        "description": "dotenv",
+        "isExtraImport": true,
+        "detail": "dotenv",
+        "documentation": {}
+    },
+    {
+        "label": "ClientData",
+        "kind": 6,
+        "importPath": "main",
+        "description": "main",
+        "peekOfCode": "class ClientData(BaseModel):\n    \"\"\"Complete client data model matching Google Sheet columns\"\"\"\n    full_name: str = Field(..., description=\"Full Name (Last Name, First Name)\")\n    age: int = Field(..., description=\"Age\")\n    phone_number: str = Field(..., description=\"Phone Number (E.g. 1234567890)\")\n    email: str = Field(..., description=\"Email\")\n    street_address: str = Field(..., description=\"Street Address\")\n    apt_unit: Optional[str] = Field(None, description=\"Apt / Unit / Secondary (optional)\")\n    city: str = Field(..., description=\"City\")\n    state: str = Field(..., description=\"State\")",
+        "detail": "main",
+        "documentation": {}
+    },
+    {
+        "label": "ClientUpdate",
+        "kind": 6,
+        "importPath": "main",
+        "description": "main",
+        "peekOfCode": "class ClientUpdate(BaseModel):\n    \"\"\"Model for updating client - requires email AND phone for verification\"\"\"\n    email: str = Field(..., description=\"Email to find the client\")\n    phone_number: str = Field(..., description=\"Phone number to verify identity\")\n    updates: Dict[str, Any] = Field(..., description=\"Fields to update with their new values\")\nclass ClientResponse(BaseModel):\n    success: bool\n    message: str\n    data: Optional[Dict[str, Any]] = None\n# API Routes",
+        "detail": "main",
+        "documentation": {}
+    },
+    {
+        "label": "ClientResponse",
+        "kind": 6,
+        "importPath": "main",
+        "description": "main",
+        "peekOfCode": "class ClientResponse(BaseModel):\n    success: bool\n    message: str\n    data: Optional[Dict[str, Any]] = None\n# API Routes\n@app.get(\"/\")\nasync def root():\n    \"\"\"Health check endpoint\"\"\"\n    return {\"status\": \"online\", \"service\": \"MOWOC SMS Intake API\"}\n@app.post(\"/api/clients/create\", response_model=ClientResponse)",
+        "detail": "main",
+        "documentation": {}
+    },
+    {
+        "label": "get_sheets_client",
+        "kind": 2,
+        "importPath": "main",
+        "description": "main",
+        "peekOfCode": "def get_sheets_client():\n    \"\"\"Initialize and return Google Sheets client\"\"\"\n    if os.getenv('GOOGLE_CREDENTIALS'):\n        creds_dict = json.loads(os.getenv('GOOGLE_CREDENTIALS'))\n        creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)\n    else:\n        creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)\n    return gspread.authorize(creds)\ndef get_worksheet():\n    \"\"\"Get the Main Validation Sheet worksheet\"\"\"",
+        "detail": "main",
+        "documentation": {}
+    },
+    {
+        "label": "get_worksheet",
+        "kind": 2,
+        "importPath": "main",
+        "description": "main",
+        "peekOfCode": "def get_worksheet():\n    \"\"\"Get the Main Validation Sheet worksheet\"\"\"\n    try:\n        client = get_sheets_client()\n        spreadsheet_id = os.getenv('SPREADSHEET_ID')\n        if not spreadsheet_id:\n            raise ValueError(\"SPREADSHEET_ID environment variable not set\")\n        spreadsheet = client.open_by_key(spreadsheet_id)\n        return spreadsheet.worksheet(\"Main Validation Sheet\")\n    except Exception as e:",
+        "detail": "main",
+        "documentation": {}
+    },
+    {
+        "label": "app",
+        "kind": 5,
+        "importPath": "main",
+        "description": "main",
+        "peekOfCode": "app = FastAPI(\n    title=\"MOWOC SMS Intake System\",\n    description=\"API for managing Meals on Wheels client intake via SMS\",\n    version=\"1.0.0\"\n)\n# Add CORS middleware\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=[\"*\"],\n    allow_credentials=True,",
+        "detail": "main",
+        "documentation": {}
+    },
+    {
+        "label": "SCOPES",
+        "kind": 5,
+        "importPath": "main",
+        "description": "main",
+        "peekOfCode": "SCOPES = [\n    'https://www.googleapis.com/auth/spreadsheets',\n    'https://www.googleapis.com/auth/drive'\n]\n# Initialize Google Sheets client\ndef get_sheets_client():\n    \"\"\"Initialize and return Google Sheets client\"\"\"\n    if os.getenv('GOOGLE_CREDENTIALS'):\n        creds_dict = json.loads(os.getenv('GOOGLE_CREDENTIALS'))\n        creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)",
+        "detail": "main",
+        "documentation": {}
+    }
+]
