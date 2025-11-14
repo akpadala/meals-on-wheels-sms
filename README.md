@@ -20,11 +20,31 @@ docs/           → Documentation (Person 4)
 ```
 
 ## Setup (Each Person)
+
+### 1. Clone and install dependencies
 ```bash
 git clone [git@github.com:username/meals-on-wheels-sms.git]
 cd meals-on-wheels-sms
-pip install flask twilio openai python-dotenv
-python app.py
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
 ```
+
+### 2. Set up environment variables
+```bash
+# Copy the example file
+cp .env.example .env
+
+# Contact team lead to get the actual credentials and update .env with:
+# - SPREADSHEET_ID
+# - GOOGLE_CREDENTIALS
+```
+
+### 3. Run the server
+```bash
+python main.py
+```
+
+Visit `http://localhost:8000/docs` to test the API endpoints.
 
 
