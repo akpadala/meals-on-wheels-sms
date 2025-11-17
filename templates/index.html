@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meals on Wheels Orange County - Client Intake</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .required {
+            color: #e74c3c;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        button {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .success-message, .error-message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .sms-option {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .sms-option h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .sms-option p {
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .phone-number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        @media (max-width: 600px) {
+            .row {
+                grid-template-columns: 1fr;
+            }
+
+            .container {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Meals on Wheels Orange County</h1>
+            <p class="subtitle">Client Intake Form</p>
+        </div>
+
+        <div class="sms-option">
+            <h3>Prefer to text instead?</h3>
+            <p>Text <strong>START</strong> to</p>
+            <p class="phone-number">+1 (316) 392-5309</p>
+        </div>
+
+        <div id="successMessage" class="success-message"></div>
+        <div id="errorMessage" class="error-message"></div>
+
+        <form id="intakeForm">
+            <div class="form-group">
+                <label>Full Name <span class="required">*</span></label>
+                <input type="text" id="full_name" name="full_name" placeholder="Last Name, First Name" required>
+            </div>
+
+            <div class="row">
+                <div class="form-group">
+                    <label>Age <span class="required">*</span></label>
+                    <input type="number" id="age" name="age" min="1" max="120" required>
+                </div>
+                <div class="form-group">
+                    <label>Phone Number <span class="required">*</span></label>
+                    <input type="tel" id="phone_number" name="phone_number" placeholder="1234567890" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Email <span class="required">*</span></label>
+                <input type="email" id="email" name="email" placeholder="your@email.com" required>
+            </div>
+
+            <div class="form-group">
+                <label>Street Address <span class="required">*</span></label>
+                <input type="text" id="street_address" name="street_address" required>
+            </div>
+
+            <div class="form-group">
+                <label>Apt / Unit / Secondary</label>
+                <input type="text" id="apt_unit" name="apt_unit" placeholder="Optional">
+            </div>
+
+            <div class="row">
+                <div class="form-group">
+                    <label>City <span class="required">*</span></label>
+                    <input type="text" id="city" name="city" required>
+                </div>
+                <div class="form-group">
+                    <label>State <span class="required">*</span></label>
+                    <input type="text" id="state" name="state" placeholder="NC" maxlength="2" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Zip Code <span class="required">*</span></label>
+                <input type="text" id="zip_code" name="zip_code" pattern="[0-9]{5}" required>
+            </div>
+
+            <div class="form-group">
+                <label>How did you hear about Meals on Wheels? <span class="required">*</span></label>
+                <input type="text" id="referral_source" name="referral_source" required>
+            </div>
+
+            <div class="form-group">
+                <label>Why are you requesting Meals on Wheels? <span class="required">*</span></label>
+                <textarea id="request_reason" name="request_reason" rows="3" required></textarea>
+            </div>
+
+            <div class="form-group">
+                <label>Do you have any pets? <span class="required">*</span></label>
+                <select id="has_pets" name="has_pets" required>
+                    <option value="">Select...</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="pet_details_group" style="display: none;">
+                <label>If yes, specify type of pet(s)</label>
+                <input type="text" id="pet_details" name="pet_details">
+            </div>
+
+            <div class="form-group">
+                <label>Do you own any weapons in your home? <span class="required">*</span></label>
+                <select id="has_weapons" name="has_weapons" required>
+                    <option value="">Select...</option>
+                    <option value="Yes">Yes</option>
+                    <option value="No">No</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Emergency Contact Name <span class="required">*</span></label>
+                <input type="text" id="emergency_contact_name" name="emergency_contact_name" placeholder="Last Name, First Name" required>
+            </div>
+
+            <div class="form-group">
+                <label>Emergency Contact Phone <span class="required">*</span></label>
+                <input type="tel" id="emergency_contact_phone" name="emergency_contact_phone" placeholder="1234567890" required>
+            </div>
+
+            <button type="submit">Submit Application</button>
+        </form>
+    </div>
+
+    <script>
+        // Show/hide pet details based on selection
+        document.getElementById('has_pets').addEventListener('change', function() {
+            const petDetailsGroup = document.getElementById('pet_details_group');
+            if (this.value === 'Yes') {
+                petDetailsGroup.style.display = 'block';
+            } else {
+                petDetailsGroup.style.display = 'none';
+            }
+        });
+
+        // Handle form submission
+        document.getElementById('intakeForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const formData = {
+                full_name: document.getElementById('full_name').value,
+                age: parseInt(document.getElementById('age').value),
+                phone_number: document.getElementById('phone_number').value,
+                email: document.getElementById('email').value,
+                street_address: document.getElementById('street_address').value,
+                apt_unit: document.getElementById('apt_unit').value || null,
+                city: document.getElementById('city').value,
+                state: document.getElementById('state').value.toUpperCase(),
+                zip_code: document.getElementById('zip_code').value,
+                referral_source: document.getElementById('referral_source').value,
+                request_reason: document.getElementById('request_reason').value,
+                has_pets: document.getElementById('has_pets').value,
+                pet_details: document.getElementById('pet_details').value || null,
+                has_weapons: document.getElementById('has_weapons').value,
+                emergency_contact_name: document.getElementById('emergency_contact_name').value,
+                emergency_contact_phone: document.getElementById('emergency_contact_phone').value
+            };
+
+            try {
+                const response = await fetch('/api/web-form-submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('successMessage').textContent =
+                        'Application submitted successfully! You will receive an SMS shortly.';
+                    document.getElementById('successMessage').style.display = 'block';
+                    document.getElementById('errorMessage').style.display = 'none';
+                    document.getElementById('intakeForm').reset();
+
+                    // Scroll to top to show message
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                } else {
+                    throw new Error(result.detail || 'Submission failed');
+                }
+            } catch (error) {
+                document.getElementById('errorMessage').textContent =
+                    'Error submitting form: ' + error.message;
+                document.getElementById('errorMessage').style.display = 'block';
+                document.getElementById('successMessage').style.display = 'none';
+
+                // Scroll to top to show error
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }
+        });
+    </script>
+</body>
+</html>

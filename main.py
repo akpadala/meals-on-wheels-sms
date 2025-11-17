@@ -1,5 +1,7 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
 import gspread
@@ -8,6 +10,11 @@ from datetime import datetime
 import os
 import json
 from dotenv import load_dotenv
+
+# Import our services
+from services.twilio_service import twilio_service
+from services.session_manager import session_manager, ConversationStage
+from services.ai_conversation import ai_handler
 
 # Load environment variables from .env file
 load_dotenv()
@@ -95,8 +102,17 @@ class ClientResponse(BaseModel):
 
 # API Routes
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 async def root():
+    """Serve the intake form"""
+    try:
+        with open("templates/index.html", "r") as f:
+            return HTMLResponse(content=f.read())
+    except FileNotFoundError:
+        return {"status": "online", "service": "MOWOC SMS Intake API"}
+
+@app.get("/health")
+async def health_check():
     """Health check endpoint"""
     return {"status": "online", "service": "MOWOC SMS Intake API"}
 
@@ -299,6 +315,153 @@ async def update_client(update: ClientUpdate):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating client: {str(e)}")
+
+@app.post("/sms-webhook")
+async def sms_webhook(From: str = Form(...), Body: str = Form(...)):
+    """
+    Twilio webhook endpoint for receiving SMS messages
+
+    Twilio sends: From (phone number), Body (message text)
+    """
+    try:
+        phone_number = From
+        user_message = Body.strip()
+
+        print(f"\n📱 Received SMS from {phone_number}: {user_message}")
+
+        # Get or create session
+        session = session_manager.get_session(phone_number)
+
+        # Handle START command or new conversation
+        if user_message.upper() == "START" or not session:
+            session = session_manager.create_session(phone_number)
+            session_manager.set_stage(phone_number, ConversationStage.COLLECTING_INFO)
+            response_message = ai_handler.handle_start_command(phone_number)
+
+        else:
+            # Add user message to session
+            session_manager.add_message(phone_number, "user", user_message)
+
+            # Process the response with AI
+            result = ai_handler.process_response(user_message, session)
+
+            if result["completed"]:
+                # Save to Google Sheets
+                try:
+                    await save_conversation_to_sheets(phone_number, session)
+                    response_message = result["message"]
+                    session_manager.set_stage(phone_number, ConversationStage.COMPLETED)
+                except Exception as e:
+                    print(f"Error saving to sheets: {e}")
+                    response_message = "Thank you for providing your information. We'll be in touch soon!"
+            else:
+                response_message = result["message"]
+
+        # Add assistant message to session
+        session_manager.add_message(phone_number, "assistant", response_message)
+
+        # Send SMS response
+        twilio_service.send_message(phone_number, response_message)
+
+        # Return TwiML response (Twilio expects this)
+        return Response(content="<?xml version='1.0' encoding='UTF-8'?><Response></Response>", media_type="application/xml")
+
+    except Exception as e:
+        print(f"❌ Error in SMS webhook: {e}")
+        import traceback
+        traceback.print_exc()
+        return Response(content="<?xml version='1.0' encoding='UTF-8'?><Response></Response>", media_type="application/xml")
+
+
+async def save_conversation_to_sheets(phone_number: str, session: Dict):
+    """Save completed conversation to Google Sheets"""
+    answers = session.get("answers", {})
+
+    # Map answers to ClientData format
+    client_data = ClientData(
+        full_name=answers.get("full_name", ""),
+        age=int(answers.get("age", 0)) if answers.get("age", "").isdigit() else 0,
+        phone_number=phone_number,
+        email=answers.get("email", ""),
+        street_address=answers.get("street_address", ""),
+        apt_unit=answers.get("apt_unit") if answers.get("apt_unit", "").lower() != "none" else None,
+        city=answers.get("city", ""),
+        state=answers.get("state", ""),
+        zip_code=answers.get("zip_code", ""),
+        referral_source=answers.get("referral_source", ""),
+        request_reason=answers.get("request_reason", ""),
+        has_pets=answers.get("has_pets", ""),
+        pet_details=answers.get("pet_details") if answers.get("has_pets", "").lower() in ["yes", "y"] else None,
+        has_weapons=answers.get("has_weapons", ""),
+        emergency_contact_name=answers.get("emergency_contact_name", ""),
+        emergency_contact_phone=answers.get("emergency_contact_phone", ""),
+        conversation_stage="completed"
+    )
+
+    # Use existing create_client endpoint logic
+    sheet = get_worksheet()
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    row_data = [
+        timestamp,
+        client_data.full_name,
+        client_data.age,
+        client_data.phone_number,
+        client_data.email,
+        client_data.street_address,
+        client_data.apt_unit or "",
+        client_data.city,
+        client_data.state,
+        client_data.zip_code,
+        client_data.referral_source,
+        client_data.request_reason,
+        client_data.has_pets,
+        client_data.pet_details or "",
+        client_data.has_weapons,
+        client_data.emergency_contact_name,
+        client_data.emergency_contact_phone,
+        client_data.language_preference or "English",
+        client_data.eligibility_status or "pending",
+        client_data.notes or "",
+        client_data.conversation_stage or "completed"
+    ]
+
+    sheet.append_row(row_data)
+    print(f"✓ Saved conversation for {phone_number} to Google Sheets")
+
+
+@app.post("/api/web-form-submit", response_model=ClientResponse)
+async def web_form_submit(client: ClientData):
+    """
+    Handle web form submission and optionally start SMS conversation
+
+    This endpoint:
+    1. Saves client data to Google Sheets
+    2. Optionally sends a welcome SMS to start the conversation
+    """
+    try:
+        # Create client in Google Sheets
+        result = await create_client(client)
+
+        # Create a session for this client
+        session_manager.create_session(
+            client.phone_number,
+            initial_data={
+                "full_name": client.full_name,
+                "email": client.email,
+                "source": "web_form"
+            }
+        )
+
+        # Send welcome SMS
+        welcome_msg = f"Hi! Thank you for submitting the form. We'll follow up with you shortly to complete your intake. Reply START to begin the conversation now."
+        twilio_service.send_message(client.phone_number, welcome_msg)
+
+        return result
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing web form: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn
