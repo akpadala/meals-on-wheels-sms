@@ -9,7 +9,16 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 import os
 import json
+import logging
+import traceback
 from dotenv import load_dotenv
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # Import our services
 from services.twilio_service import twilio_service
@@ -26,14 +35,22 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Configure CORS origins from environment variable
+# For development: CORS_ORIGINS="http://localhost:3000,http://localhost:8000"
+# For production: Set to your actual domain(s)
+cors_origins_str = os.getenv("CORS_ORIGINS", "*")
+allowed_origins = cors_origins_str.split(",") if cors_origins_str != "*" else ["*"]
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
+
+logger.info(f"CORS configured with origins: {allowed_origins}")
 
 # Google Sheets setup
 SCOPES = [
@@ -323,17 +340,29 @@ async def sms_webhook(From: str = Form(...), Body: str = Form(...)):
 
     Twilio sends: From (phone number), Body (message text)
     """
+    phone_number = None
+    response_message = "We're sorry, something went wrong. Please try again later or call us directly."
+
     try:
         phone_number = From
         user_message = Body.strip()
 
-        print(f"\n📱 Received SMS from {phone_number}: {user_message}")
+        logger.info(f"📱 Received SMS from {phone_number}: {user_message[:50]}...")
+
+        # Validate inputs
+        if not phone_number or not user_message:
+            logger.error("Missing phone number or message body")
+            return Response(
+                content="<?xml version='1.0' encoding='UTF-8'?><Response></Response>",
+                media_type="application/xml"
+            )
 
         # Get or create session
         session = session_manager.get_session(phone_number)
 
         # Handle START command or new conversation
         if user_message.upper() == "START" or not session:
+            logger.info(f"Starting new conversation for {phone_number}")
             session = session_manager.create_session(phone_number)
             session_manager.set_stage(phone_number, ConversationStage.COLLECTING_INFO)
             response_message = ai_handler.handle_start_command(phone_number)
@@ -343,34 +372,73 @@ async def sms_webhook(From: str = Form(...), Body: str = Form(...)):
             session_manager.add_message(phone_number, "user", user_message)
 
             # Process the response with AI
-            result = ai_handler.process_response(user_message, session)
+            try:
+                result = ai_handler.process_response(user_message, session)
 
-            if result["completed"]:
-                # Save to Google Sheets
-                try:
-                    await save_conversation_to_sheets(phone_number, session)
+                if result["completed"]:
+                    # Save to Google Sheets
+                    try:
+                        await save_conversation_to_sheets(phone_number, session)
+                        response_message = result["message"]
+                        session_manager.set_stage(phone_number, ConversationStage.COMPLETED)
+                        logger.info(f"✅ Completed conversation for {phone_number}")
+                    except gspread.exceptions.APIError as e:
+                        logger.error(f"Google Sheets API error for {phone_number}: {e}")
+                        response_message = "Thank you for providing your information. We'll review it and be in touch soon!"
+                        session_manager.set_stage(phone_number, ConversationStage.ERROR)
+                    except Exception as e:
+                        logger.error(f"Error saving to sheets for {phone_number}: {e}")
+                        traceback.print_exc()
+                        response_message = "Thank you for providing your information. We'll be in touch soon!"
+                        session_manager.set_stage(phone_number, ConversationStage.ERROR)
+                else:
                     response_message = result["message"]
-                    session_manager.set_stage(phone_number, ConversationStage.COMPLETED)
-                except Exception as e:
-                    print(f"Error saving to sheets: {e}")
-                    response_message = "Thank you for providing your information. We'll be in touch soon!"
-            else:
-                response_message = result["message"]
+
+            except Exception as e:
+                logger.error(f"Error processing response for {phone_number}: {e}")
+                traceback.print_exc()
+                response_message = "I didn't quite understand that. Could you please try again?"
 
         # Add assistant message to session
-        session_manager.add_message(phone_number, "assistant", response_message)
+        try:
+            session_manager.add_message(phone_number, "assistant", response_message)
+        except Exception as e:
+            logger.error(f"Error adding message to session for {phone_number}: {e}")
 
         # Send SMS response
-        twilio_service.send_message(phone_number, response_message)
+        try:
+            twilio_service.send_message(phone_number, response_message)
+            logger.info(f"✅ Sent response to {phone_number}")
+        except Exception as e:
+            logger.error(f"Error sending SMS to {phone_number}: {e}")
+            # Don't fail the request if SMS send fails
+            # Twilio will handle retries
 
         # Return TwiML response (Twilio expects this)
-        return Response(content="<?xml version='1.0' encoding='UTF-8'?><Response></Response>", media_type="application/xml")
+        return Response(
+            content="<?xml version='1.0' encoding='UTF-8'?><Response></Response>",
+            media_type="application/xml"
+        )
 
     except Exception as e:
-        print(f"❌ Error in SMS webhook: {e}")
-        import traceback
+        logger.error(f"❌ Critical error in SMS webhook: {e}")
         traceback.print_exc()
-        return Response(content="<?xml version='1.0' encoding='UTF-8'?><Response></Response>", media_type="application/xml")
+
+        # Try to send error message to user if we have their number
+        if phone_number:
+            try:
+                twilio_service.send_message(
+                    phone_number,
+                    "We're experiencing technical difficulties. Please try again in a few minutes."
+                )
+            except Exception:
+                pass  # Fail silently if we can't send error message
+
+        # Always return valid TwiML to Twilio
+        return Response(
+            content="<?xml version='1.0' encoding='UTF-8'?><Response></Response>",
+            media_type="application/xml"
+        )
 
 
 async def save_conversation_to_sheets(phone_number: str, session: Dict):

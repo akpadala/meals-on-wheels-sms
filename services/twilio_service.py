@@ -7,6 +7,8 @@ from typing import Optional
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
 from dotenv import load_dotenv
+import phonenumbers
+from phonenumbers import NumberParseException
 
 load_dotenv()
 
@@ -35,19 +37,21 @@ class TwilioService:
             Message SID if successful, None otherwise
         """
         try:
-            # Ensure phone number is in E164 format
-            if not to_number.startswith('+'):
-                to_number = f'+1{to_number}'
+            # Validate and format phone number to E164
+            formatted_number = self.validate_phone_number(to_number)
 
             message_obj = self.client.messages.create(
                 body=message,
                 from_=self.phone_number,
-                to=to_number
+                to=formatted_number
             )
 
-            print(f"✓ SMS sent to {to_number}: {message_obj.sid}")
+            print(f"✓ SMS sent to {formatted_number}: {message_obj.sid}")
             return message_obj.sid
 
+        except ValueError as e:
+            print(f"✗ Invalid phone number {to_number}: {e}")
+            return None
         except TwilioRestException as e:
             print(f"✗ Twilio error sending to {to_number}: {e}")
             return None
@@ -66,28 +70,30 @@ class TwilioService:
 
     def validate_phone_number(self, phone_number: str) -> str:
         """
-        Validate and format phone number to E164 format
+        Validate and format phone number to E164 format using phonenumbers library
 
         Args:
             phone_number: Phone number in any format
 
         Returns:
             E164 formatted phone number (+1234567890)
-        """
-        # Remove all non-digit characters
-        digits = ''.join(filter(str.isdigit, phone_number))
 
-        # If it's a 10-digit US number, add +1
-        if len(digits) == 10:
-            return f'+1{digits}'
-        # If it's 11 digits starting with 1, add +
-        elif len(digits) == 11 and digits.startswith('1'):
-            return f'+{digits}'
-        # If it already starts with +, return as-is
-        elif phone_number.startswith('+'):
-            return phone_number
-        else:
-            raise ValueError(f"Invalid phone number format: {phone_number}")
+        Raises:
+            ValueError: If phone number is invalid
+        """
+        try:
+            # Parse the phone number (default to US region)
+            parsed = phonenumbers.parse(phone_number, "US")
+
+            # Validate the number
+            if not phonenumbers.is_valid_number(parsed):
+                raise ValueError(f"Invalid phone number: {phone_number}")
+
+            # Format to E164 (+1234567890)
+            return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+
+        except NumberParseException as e:
+            raise ValueError(f"Could not parse phone number '{phone_number}': {e}")
 
 # Global Twilio service instance
 twilio_service = TwilioService()
