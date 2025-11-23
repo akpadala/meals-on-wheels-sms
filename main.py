@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, Form, Request
+from fastapi import FastAPI, HTTPException, Form, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, HTMLResponse
+from fastapi.responses import Response, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from typing import Optional, Dict, Any
@@ -12,45 +12,77 @@ import json
 import logging
 import traceback
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
+
+# Load environment variables first
+load_dotenv()
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=os.getenv("LOG_LEVEL", "INFO"),
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Import configuration and middleware
+from config import get_settings, validate_config_on_startup
+from middleware import (
+    RateLimitMiddleware,
+    SecurityHeadersMiddleware,
+    verify_api_key,
+    verify_twilio_signature
+)
 
 # Import our services
 from services.twilio_service import twilio_service
 from services.session_manager import session_manager, ConversationStage
 from services.ai_conversation import ai_handler
 
-# Load environment variables from .env file
-load_dotenv()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan manager for startup/shutdown"""
+    # Startup
+    logger.info("🚀 Starting MOWOC SMS Intake System...")
+    settings = validate_config_on_startup()
+    logger.info("✅ Application started successfully")
+    yield
+    # Shutdown
+    logger.info("👋 Shutting down MOWOC SMS Intake System...")
+
+# Get settings for app initialization
+_settings = get_settings()
 
 # Initialize FastAPI app
 app = FastAPI(
     title="MOWOC SMS Intake System",
     description="API for managing Meals on Wheels client intake via SMS",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan,
+    docs_url="/docs" if not _settings.is_production else None,  # Disable docs in production
+    redoc_url="/redoc" if not _settings.is_production else None
 )
 
-# Configure CORS origins from environment variable
-# For development: CORS_ORIGINS="http://localhost:3000,http://localhost:8000"
-# For production: Set to your actual domain(s)
-cors_origins_str = os.getenv("CORS_ORIGINS", "*")
-allowed_origins = cors_origins_str.split(",") if cors_origins_str != "*" else ["*"]
+# Add security headers middleware
+app.add_middleware(SecurityHeadersMiddleware)
 
-# Add CORS middleware
+# Add rate limiting middleware
+app.add_middleware(
+    RateLimitMiddleware,
+    requests_per_window=_settings.RATE_LIMIT_REQUESTS,
+    window_seconds=_settings.RATE_LIMIT_WINDOW
+)
+
+# Add CORS middleware with proper configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=allowed_origins,
+    allow_origins=_settings.cors_origins_list,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
-logger.info(f"CORS configured with origins: {allowed_origins}")
+logger.info(f"CORS configured with origins: {_settings.cors_origins_list}")
 
 # Google Sheets setup
 SCOPES = [
@@ -61,25 +93,27 @@ SCOPES = [
 # Initialize Google Sheets client
 def get_sheets_client():
     """Initialize and return Google Sheets client"""
-    if os.getenv('GOOGLE_CREDENTIALS'):
-        creds_dict = json.loads(os.getenv('GOOGLE_CREDENTIALS'))
-        creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
-    else:
-        creds = Credentials.from_service_account_file('credentials.json', scopes=SCOPES)
+    settings = get_settings()
+    creds_dict = settings.google_credentials_dict
+    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
     return gspread.authorize(creds)
 
 def get_worksheet():
     """Get the Main Validation Sheet worksheet"""
     try:
+        settings = get_settings()
         client = get_sheets_client()
-        spreadsheet_id = os.getenv('SPREADSHEET_ID')
-        if not spreadsheet_id:
-            raise ValueError("SPREADSHEET_ID environment variable not set")
-        spreadsheet = client.open_by_key(spreadsheet_id)
+        spreadsheet = client.open_by_key(settings.SPREADSHEET_ID)
         return spreadsheet.worksheet("Main Validation Sheet")
+    except gspread.exceptions.SpreadsheetNotFound:
+        logger.error(f"Spreadsheet not found. Check SPREADSHEET_ID.")
+        raise HTTPException(status_code=500, detail="Database configuration error")
+    except gspread.exceptions.WorksheetNotFound:
+        logger.error("Worksheet 'Main Validation Sheet' not found in spreadsheet")
+        raise HTTPException(status_code=500, detail="Database configuration error")
     except Exception as e:
-        print(f"Error opening worksheet: {str(e)}")
-        raise
+        logger.error(f"Error opening worksheet: {str(e)}")
+        raise HTTPException(status_code=500, detail="Database connection error")
 
 # Pydantic models matching your exact sheet schema
 class ClientData(BaseModel):
@@ -130,15 +164,59 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    return {"status": "online", "service": "MOWOC SMS Intake API"}
+    """
+    Health check endpoint for monitoring and load balancers
 
-@app.post("/api/clients/create", response_model=ClientResponse)
+    Returns detailed status of all service dependencies.
+    """
+    health_status = {
+        "status": "healthy",
+        "service": "MOWOC SMS Intake API",
+        "version": "1.0.0",
+        "checks": {}
+    }
+
+    # Check Google Sheets connectivity
+    try:
+        sheet = get_worksheet()
+        health_status["checks"]["google_sheets"] = "healthy"
+    except Exception as e:
+        health_status["checks"]["google_sheets"] = "unhealthy"
+        health_status["status"] = "degraded"
+        logger.warning(f"Health check: Google Sheets unhealthy - {e}")
+
+    # Check Twilio (just verify credentials are loaded)
+    try:
+        from services.twilio_service import twilio_service
+        if twilio_service.client:
+            health_status["checks"]["twilio"] = "healthy"
+        else:
+            health_status["checks"]["twilio"] = "unhealthy"
+            health_status["status"] = "degraded"
+    except Exception as e:
+        health_status["checks"]["twilio"] = "unhealthy"
+        health_status["status"] = "degraded"
+        logger.warning(f"Health check: Twilio unhealthy - {e}")
+
+    # Check OpenAI (just verify client is initialized)
+    try:
+        from services.ai_conversation import ai_handler
+        health_status["checks"]["openai"] = "healthy" if ai_handler.use_ai else "degraded"
+    except Exception as e:
+        health_status["checks"]["openai"] = "unhealthy"
+        logger.warning(f"Health check: OpenAI unhealthy - {e}")
+
+    # Return appropriate status code
+    status_code = 200 if health_status["status"] == "healthy" else 503
+    return JSONResponse(content=health_status, status_code=status_code)
+
+@app.post("/api/clients/create", response_model=ClientResponse, dependencies=[Depends(verify_api_key)])
 async def create_client(client: ClientData):
     """
     Create a new client record in Google Sheets
-    
-    Creates a new row with all client information
+
+    Creates a new row with all client information.
+    Requires API key authentication via X-API-Key header.
     """
     try:
         sheet = get_worksheet()
@@ -188,12 +266,13 @@ async def create_client(client: ClientData):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error creating client: {str(e)}")
 
-@app.get("/api/clients/{email}", response_model=ClientResponse)
+@app.get("/api/clients/{email}", response_model=ClientResponse, dependencies=[Depends(verify_api_key)])
 async def get_client_by_email(email: str):
     """
     Get client data by email address
-    
-    Searches for the client using their email and returns all their information
+
+    Searches for the client using their email and returns all their information.
+    Requires API key authentication via X-API-Key header.
     """
     try:
         sheet = get_worksheet()
@@ -243,14 +322,15 @@ async def get_client_by_email(email: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving client: {str(e)}")
 
-@app.put("/api/clients/update", response_model=ClientResponse)
+@app.put("/api/clients/update", response_model=ClientResponse, dependencies=[Depends(verify_api_key)])
 async def update_client(update: ClientUpdate):
     """
     Update client information using email and phone number for verification
-    
+
     Requires both email and phone number to match for security.
     Updates the entire row with provided fields.
-    
+    Requires API key authentication via X-API-Key header.
+
     Example request body:
     {
         "email": "john@example.com",
@@ -315,7 +395,7 @@ async def update_client(update: ClientUpdate):
                 sheet.update_cell(email_cell.row, col, value)
                 updated_fields.append(field)
             else:
-                print(f"Warning: Field '{field}' not found in column mapping")
+                logger.warning(f"Field '{field}' not found in column mapping")
         
         return ClientResponse(
             success=True,
@@ -334,20 +414,29 @@ async def update_client(update: ClientUpdate):
         raise HTTPException(status_code=500, detail=f"Error updating client: {str(e)}")
 
 @app.post("/sms-webhook")
-async def sms_webhook(From: str = Form(...), Body: str = Form(...)):
+async def sms_webhook(request: Request, From: str = Form(...), Body: str = Form(...)):
     """
     Twilio webhook endpoint for receiving SMS messages
 
     Twilio sends: From (phone number), Body (message text)
+    Verifies Twilio webhook signature for security.
     """
     phone_number = None
     response_message = "We're sorry, something went wrong. Please try again later or call us directly."
 
     try:
+        # Verify Twilio signature in production
+        settings = get_settings()
+        if settings.is_production:
+            body = await request.body()
+            if not verify_twilio_signature(request, body):
+                logger.warning(f"Invalid Twilio signature from {request.client.host}")
+                raise HTTPException(status_code=403, detail="Invalid webhook signature")
+
         phone_number = From
         user_message = Body.strip()
 
-        logger.info(f"📱 Received SMS from {phone_number}: {user_message[:50]}...")
+        logger.info(f"Received SMS from {phone_number}: {user_message[:50]}...")
 
         # Validate inputs
         if not phone_number or not user_message:
@@ -495,7 +584,7 @@ async def save_conversation_to_sheets(phone_number: str, session: Dict):
     ]
 
     sheet.append_row(row_data)
-    print(f"✓ Saved conversation for {phone_number} to Google Sheets")
+    logger.info(f"Saved conversation for {phone_number} to Google Sheets")
 
 
 @app.post("/api/web-form-submit", response_model=ClientResponse)
@@ -533,4 +622,10 @@ async def web_form_submit(client: ClientData):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    settings = get_settings()
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=settings.PORT,
+        log_level=settings.LOG_LEVEL.lower()
+    )

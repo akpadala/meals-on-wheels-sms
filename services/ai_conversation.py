@@ -4,6 +4,7 @@ Manages the conversational flow for intake questions
 """
 import os
 import re
+import logging
 from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv
 import phonenumbers
@@ -11,6 +12,8 @@ from phonenumbers import NumberParseException
 from openai import OpenAI
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 # Intake questions to collect from clients
 INTAKE_QUESTIONS = [
@@ -104,7 +107,7 @@ class AIConversationHandler:
             try:
                 self.openai_client = OpenAI(api_key=self.openai_key)
             except Exception as e:
-                print(f"Warning: Could not initialize OpenAI client: {e}")
+                logger.warning(f"Could not initialize OpenAI client: {e}")
 
         self.use_ai = self.openai_client is not None
 
@@ -252,7 +255,7 @@ Create a brief, warm transition (1-2 sentences max) that acknowledges their answ
             return response.choices[0].message.content.strip()
 
         except Exception as e:
-            print(f"AI enhancement failed: {e}")
+            logger.warning(f"AI enhancement failed: {e}")
             # Fallback to simple response
             return f"Got it! {next_question}"
 
@@ -301,7 +304,7 @@ Rewrite the error message to be friendlier and more helpful (1 short sentence)."
             return False, f"{friendly_error} {question}"
 
         except Exception as e:
-            print(f"AI validation enhancement failed: {e}")
+            logger.warning(f"AI validation enhancement failed: {e}")
             return is_valid, f"{error_message} {question}"
 
     def validate_answer(self, answer: str, validation_type: str) -> Tuple[bool, Optional[str]]:

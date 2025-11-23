@@ -3,6 +3,7 @@ Twilio SMS Service
 Handles sending and receiving SMS messages
 """
 import os
+import logging
 from typing import Optional
 from twilio.rest import Client
 from twilio.base.exceptions import TwilioRestException
@@ -11,6 +12,8 @@ import phonenumbers
 from phonenumbers import NumberParseException
 
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 class TwilioService:
     """Service for sending and receiving SMS via Twilio"""
@@ -46,17 +49,17 @@ class TwilioService:
                 to=formatted_number
             )
 
-            print(f"✓ SMS sent to {formatted_number}: {message_obj.sid}")
+            logger.info(f"SMS sent to {formatted_number}: {message_obj.sid}")
             return message_obj.sid
 
         except ValueError as e:
-            print(f"✗ Invalid phone number {to_number}: {e}")
+            logger.error(f"Invalid phone number {to_number}: {e}")
             return None
         except TwilioRestException as e:
-            print(f"✗ Twilio error sending to {to_number}: {e}")
+            logger.error(f"Twilio error sending to {to_number}: {e}")
             return None
         except Exception as e:
-            print(f"✗ Error sending SMS to {to_number}: {e}")
+            logger.error(f"Error sending SMS to {to_number}: {e}")
             return None
 
     def send_welcome_message(self, to_number: str, first_name: Optional[str] = None) -> Optional[str]:

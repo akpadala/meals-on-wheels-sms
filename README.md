@@ -1,319 +1,212 @@
-# Meals on Wheels SMS Intake MVP
+# Meals on Wheels SMS Intake System
 
-A conversational SMS intake system for Meals on Wheels Orange County that uses AI to collect client information and automatically stores it in Google Sheets.
+An AI-powered SMS intake system for Meals on Wheels Orange County. Clients text in, answer a few questions through natural conversation, and their info is automatically saved to Google Sheets.
 
-## Features
+## What It Does
 
-- **SMS Conversation Flow**: AI-powered conversational intake via SMS
-- **Google Sheets Integration**: Automatic data storage and retrieval
-- **Web Form Submission**: Alternative intake method via web form
-- **Validation**: Comprehensive input validation (email, phone, age, zip code, etc.)
-- **Session Management**: Persistent conversation state across messages
+- Clients text **START** to begin the intake process
+- AI guides them through questions (name, age, address, emergency contact, etc.)
+- Validates responses in real-time with friendly error messages
+- Saves completed intakes to Google Sheets automatically
+- Also works via web form at the root URL
 
-## Folder Structure
-```
-routes/         → API endpoints
-services/       → Twilio, AI, Sheets code
-templates/      → HTML form
-static/         → CSS/JS
-data/           → Session storage
-tests/          → Testing docs
-docs/           → Documentation
-```
+## Quick Start
 
-## Prerequisites
-
-Before deploying, ensure you have:
-
-1. **Twilio Account**
-   - Account SID and Auth Token
-   - A Twilio phone number with SMS capability
-
-2. **Google Cloud Project**
-   - Service account with Google Sheets API enabled
-   - Service account JSON credentials
-   - A Google Sheet with "Main Validation Sheet" worksheet
-
-3. **OpenAI Account**
-   - OpenAI API key (for AI conversation)
-
-4. **Python 3.8+** installed
-
-## Local Development Setup
-
-### 1. Clone and install dependencies
+### 1. Clone and install
 ```bash
-git clone https://github.com/username/meals-on-wheels-sms.git
+git clone https://github.com/your-repo/meals-on-wheels-sms.git
 cd meals-on-wheels-sms
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Set up environment variables
+### 2. Set up your .env file
 ```bash
-# Copy the example file
 cp .env.example .env
 ```
 
-Edit `.env` with your credentials:
-```bash
-# Google Sheets
-SPREADSHEET_ID=your_google_sheet_id_here
-GOOGLE_CREDENTIALS={"type":"service_account","project_id":"..."}
+Fill in your credentials:
+- **Google Sheets**: Spreadsheet ID + service account JSON
+- **Twilio**: Account SID, Auth Token, Phone Number
+- **OpenAI**: API key for AI conversations
 
-# Twilio SMS
-TWILIO_ACCOUNT_SID=your_twilio_account_sid
-TWILIO_AUTH_TOKEN=your_twilio_auth_token
-TWILIO_PHONE_NUMBER=+1234567890
-
-# OpenAI
-OPENAI_API_KEY=sk-your_openai_api_key
-
-# CORS (comma-separated)
-CORS_ORIGINS=http://localhost:3000,http://localhost:8000
-```
-
-### 3. Run the server locally
+### 3. Run locally
 ```bash
 python main.py
 ```
 
-Visit `http://localhost:8000/docs` to test the API endpoints.
+Server starts at `http://localhost:8000`
 
-## Deployment
+---
 
-### Option 1: Railway
+## Deploy to Production
 
-1. Install Railway CLI:
-```bash
-npm i -g @railway/cli
-```
+### Railway (Recommended)
 
-2. Login and initialize:
-```bash
-railway login
-railway init
-```
+1. Push your code to GitHub
 
-3. Add environment variables in Railway dashboard or via CLI:
-```bash
-railway variables set SPREADSHEET_ID="your_value"
-railway variables set TWILIO_ACCOUNT_SID="your_value"
-# ... add all other variables from .env
-```
+2. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub
 
-4. Deploy:
-```bash
-railway up
-```
+3. Add your environment variables in the **Variables** tab:
+   - Click **Raw Editor**
+   - Paste all your .env variables
+   - Set `ENV=production`
 
-5. Get your deployment URL and configure Twilio webhook (see below).
+4. Railway gives you a URL like `https://your-app.up.railway.app`
 
-### Option 2: Render
+5. Update Twilio webhook (see below)
 
-1. Create a new Web Service on [Render](https://render.com)
+### Other Platforms
 
-2. Connect your GitHub repository
+**Render**: Connect GitHub, it auto-detects the Dockerfile
 
-3. Configure:
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+**Heroku**: `git push heroku main` (needs Heroku CLI)
 
-4. Add environment variables in Render dashboard (all variables from `.env`)
+---
 
-5. Deploy and get your service URL
+## Configure Twilio Webhook
 
-### Option 3: Heroku
+After deploying:
 
-1. Install Heroku CLI and login:
-```bash
-heroku login
-```
-
-2. Create app:
-```bash
-heroku create your-app-name
-```
-
-3. Add environment variables:
-```bash
-heroku config:set SPREADSHEET_ID="your_value"
-heroku config:set TWILIO_ACCOUNT_SID="your_value"
-# ... add all other variables
-```
-
-4. Create `Procfile` in project root:
-```
-web: uvicorn main:app --host 0.0.0.0 --port $PORT
-```
-
-5. Deploy:
-```bash
-git push heroku main
-```
-
-## Configuring Twilio Webhook
-
-After deployment, configure your Twilio phone number:
-
-1. Go to [Twilio Console](https://console.twilio.com/)
-2. Navigate to Phone Numbers → Manage → Active Numbers
-3. Select your phone number
-4. Under "Messaging Configuration":
-   - **A MESSAGE COMES IN**: Webhook
-   - **URL**: `https://your-deployment-url.com/sms-webhook`
-   - **HTTP Method**: POST
+1. Go to [Twilio Console](https://console.twilio.com)
+2. Phone Numbers → Your number
+3. Under Messaging, set webhook URL to:
+   ```
+   https://your-app-url.com/sms-webhook
+   ```
+4. Method: POST
 5. Save
 
-## How to Use
+Now texts to your Twilio number will hit your app!
 
-### SMS Intake Flow
+---
 
-1. **User texts "START"** to your Twilio number
-2. System welcomes them and asks the first question
-3. User responds with their information
-4. System validates and asks the next question
-5. Process continues until all information is collected
-6. Data is automatically saved to Google Sheets
+## Environment Variables
 
-**Example Conversation:**
+| Variable | Description |
+|----------|-------------|
+| `SPREADSHEET_ID` | Your Google Sheet ID (from the URL) |
+| `GOOGLE_CREDENTIALS` | Full service account JSON |
+| `TWILIO_ACCOUNT_SID` | From Twilio Console |
+| `TWILIO_AUTH_TOKEN` | From Twilio Console |
+| `TWILIO_PHONE_NUMBER` | Your Twilio number (+1...) |
+| `OPENAI_API_KEY` | From OpenAI dashboard |
+| `API_KEY` | Your API key for protected endpoints |
+| `ENV` | `development` or `production` |
+| `CORS_ORIGINS` | Allowed origins (use `*` for dev) |
+| `PORT` | Server port (default: 8000) |
+
+---
+
+## API Endpoints
+
+### Public
+- `GET /` - Web intake form
+- `GET /health` - Health check with service status
+
+### Protected (require `X-API-Key` header)
+- `POST /api/clients/create` - Create new client
+- `GET /api/clients/{email}` - Get client by email
+- `PUT /api/clients/update` - Update client info
+
+### Webhooks
+- `POST /sms-webhook` - Twilio SMS webhook
+
+---
+
+## Security Features
+
+- **API Key Authentication** - Protected endpoints require `X-API-Key` header
+- **Rate Limiting** - 100 requests per minute by default
+- **Twilio Signature Verification** - Validates webhooks in production
+- **Security Headers** - XSS protection, clickjacking prevention, etc.
+- **Environment Validation** - Checks all required vars on startup
+
+---
+
+## Project Structure
+
+```
+├── main.py              # FastAPI app and routes
+├── config.py            # Environment validation
+├── middleware.py        # Auth, rate limiting, security
+├── services/
+│   ├── twilio_service.py    # SMS sending
+│   ├── ai_conversation.py   # AI chat flow
+│   └── session_manager.py   # Conversation state
+├── templates/           # Web form HTML
+├── tests/               # Unit tests
+├── Dockerfile           # Container config
+└── requirements.txt     # Dependencies
+```
+
+---
+
+## Testing
+
+Run the test suite:
+```bash
+pytest
+```
+
+Test the health endpoint:
+```bash
+curl http://localhost:8000/health
+```
+
+---
+
+## Example SMS Conversation
+
 ```
 User: START
 
-Bot: Welcome to Meals on Wheels Orange County! I'm here to help you
-     get started. What is your full name? (Please provide Last Name, First Name)
+Bot: Welcome to Meals on Wheels Orange County! I'm here to help
+     you get started. What is your full name? (Last Name, First Name)
 
 User: Smith, John
 
-Bot: Thank you, John! How old are you?
+Bot: Nice to meet you, John! How old are you?
 
 User: 72
 
 Bot: Got it! What is your email address?
 
-[continues through all questions...]
+User: john@email.com
+
+Bot: Thanks! What is your street address?
+
+... continues through all questions ...
+
+Bot: Thank you! I've collected all the information. We'll review
+     your application and get back to you soon.
 ```
 
-### Web Form Submission
-
-1. Navigate to `https://your-deployment-url.com/`
-2. Fill out the intake form
-3. Submit
-4. Data is saved to Google Sheets and user receives welcome SMS
-
-## API Endpoints
-
-### Health Check
-```
-GET /health
-```
-Returns service status
-
-### Create Client
-```
-POST /api/clients/create
-Content-Type: application/json
-
-{
-  "full_name": "Doe, John",
-  "age": 75,
-  "phone_number": "9195551234",
-  "email": "john@example.com",
-  ...
-}
-```
-
-### Get Client
-```
-GET /api/clients/{email}
-```
-Retrieves client data by email
-
-### Update Client
-```
-PUT /api/clients/update
-Content-Type: application/json
-
-{
-  "email": "john@example.com",
-  "phone_number": "9195551234",
-  "updates": {
-    "eligibility_status": "approved",
-    "notes": "Ready for delivery"
-  }
-}
-```
-
-### SMS Webhook (Twilio)
-```
-POST /sms-webhook
-```
-Receives SMS messages from Twilio (configured in Twilio dashboard)
-
-## Google Sheets Structure
-
-Your Google Sheet "Main Validation Sheet" should have these columns:
-
-1. Timestamp
-2. Full Name
-3. Age
-4. Phone Number
-5. Email
-6. Street Address
-7. Apt/Unit/Secondary
-8. City
-9. State
-10. Zip Code
-11. Referral Source
-12. Request Reason
-13. Has Pets
-14. Pet Details
-15. Has Weapons
-16. Emergency Contact Name
-17. Emergency Contact Phone
-18. Language Preference
-19. Eligibility Status
-20. Notes
-21. Conversation Stage
+---
 
 ## Troubleshooting
 
-### SMS not being received
+**SMS not working?**
+- Check Twilio webhook URL matches your deployment
+- Look at Twilio Console logs for errors
 
-- Check Twilio webhook URL is correct
-- Verify webhook is set to POST method
-- Check Twilio console logs for errors
-- Ensure deployment URL is accessible
+**Google Sheets not updating?**
+- Verify service account has edit access to the sheet
+- Check that worksheet is named "Main Validation Sheet"
 
-### Google Sheets not updating
+**AI responses not working?**
+- Check OpenAI API key is valid
+- System falls back to simple responses if AI fails
 
-- Verify SPREADSHEET_ID is correct
-- Check service account has edit permissions on the sheet
-- Ensure worksheet name is exactly "Main Validation Sheet"
-- Check logs for Google API errors
+---
 
-### AI responses not working
+## Contributing
 
-- Verify OPENAI_API_KEY is valid
-- Check OpenAI account has available credits
-- System falls back to simple responses if OpenAI fails
+1. Fork the repo
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `pytest`
+5. Submit a PR
 
-### Sessions not persisting
+---
 
-- Ensure `data/` directory exists
-- Check file permissions
-- Review logs for session save errors
-
-## Development Notes
-
-- Sessions are stored in `data/sessions.json` (file-based, not suitable for high traffic)
-- CORS configuration should be updated for production (not `*`)
-- Consider adding rate limiting for production use
-- Add authentication for API endpoints in production
-
-## Support
-
-For issues or questions, please open an issue on GitHub.
-
-
+Built for Meals on Wheels Orange County

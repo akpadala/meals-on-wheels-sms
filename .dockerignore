@@ -1,10 +1,9 @@
-# Environment files (secrets!)
-.env
-*.env
-!.env.example
+# Git
+.git
+.gitignore
 
 # Python
-__pycache__/
+__pycache__
 *.py[cod]
 *$py.class
 *.so
@@ -36,7 +35,6 @@ env/
 .vscode/
 *.swp
 *.swo
-*.sublime-*
 
 # Testing
 .pytest_cache/
@@ -44,29 +42,27 @@ env/
 htmlcov/
 .tox/
 .nox/
-coverage.xml
-*.cover
 
-# mypy
-.mypy_cache/
+# Documentation
+docs/_build/
 
-# Credentials
-credentials.json
-*.pem
-*.key
+# Environment files (secrets!)
+.env
+*.env
+!.env.example
+
+# Local data
+data/
+*.json.bak
 
 # Logs
 *.log
-logs/
-
-# Local data
-data/sessions.json
-data/sessions.json.bak
 
 # OS files
 .DS_Store
 Thumbs.db
-*~
 
-# Jupyter
-.ipynb_checkpoints/
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
