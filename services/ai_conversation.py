@@ -152,11 +152,13 @@ class AIConversationHandler:
                 - completed: bool
         """
         current_index = session_data.get("current_question_index", 0)
+        logger.info(f"🔄 Processing response. Current question index: {current_index}/{len(INTAKE_QUESTIONS)}")
 
         # Validate the answer if we're still collecting questions
         if current_index < len(INTAKE_QUESTIONS):
             question_data = INTAKE_QUESTIONS[current_index]
             validation_type = question_data.get("validation", "text")
+            logger.info(f"❓ Validating answer for question: {question_data['key']}")
 
             # Validate the answer with AI-enhanced feedback if available
             is_valid, error_message = self.ai_validate_with_help(
@@ -166,6 +168,7 @@ class AIConversationHandler:
             )
 
             if not is_valid:
+                logger.warning(f"❌ Validation failed for {question_data['key']}: {error_message}")
                 # Return error message without advancing
                 return {
                     "valid": False,
@@ -176,6 +179,7 @@ class AIConversationHandler:
 
             # Store the answer
             session_data["answers"][question_data["key"]] = user_message
+            logger.info(f"✅ Stored answer for {question_data['key']}. Total answers: {len(session_data['answers'])}")
 
             # Move to next question
             session_data["current_question_index"] = current_index + 1
@@ -184,6 +188,7 @@ class AIConversationHandler:
         next_question = self.get_next_question(session_data)
 
         if next_question:
+            logger.info(f"➡️  Moving to next question (index {session_data.get('current_question_index', 0)})")
             # Use AI to create a more conversational response
             if current_index < len(INTAKE_QUESTIONS):
                 question_key = INTAKE_QUESTIONS[current_index - 1]["key"]
@@ -202,6 +207,7 @@ class AIConversationHandler:
                 "completed": False
             }
         else:
+            logger.info(f"🎉 Conversation completed! Collected {len(session_data.get('answers', {}))} answers")
             return {
                 "valid": True,
                 "next_question": None,

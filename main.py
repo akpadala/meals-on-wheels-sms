@@ -462,25 +462,33 @@ async def sms_webhook(From: str = Form(...), Body: str = Form(...)):
                 if result["completed"]:
                     # Save to Google Sheets
                     try:
+                        logger.info(f"💾 Attempting to save conversation for {phone_number} to Google Sheets")
+                        logger.info(f"📋 Session answers: {session.get('answers', {})}")
+
                         await save_conversation_to_sheets(phone_number, session)
+
                         response_message = result["message"]
                         session_manager.set_stage(phone_number, ConversationStage.COMPLETED)
-                        logger.info(f"✅ Completed conversation for {phone_number}")
+                        logger.info(f"✅ Successfully saved conversation for {phone_number} to Google Sheets")
+
                     except gspread.exceptions.APIError as e:
-                        logger.error(f"Google Sheets API error for {phone_number}: {e}")
+                        logger.error(f"❌ Google Sheets API error for {phone_number}: {e}")
+                        logger.error(f"Full traceback: {traceback.format_exc()}")
                         response_message = "Thank you for providing your information. We'll review it and be in touch soon!"
                         session_manager.set_stage(phone_number, ConversationStage.ERROR)
+
                     except Exception as e:
-                        logger.error(f"Error saving to sheets for {phone_number}: {e}")
-                        traceback.print_exc()
+                        logger.error(f"❌ Error saving to sheets for {phone_number}: {e}")
+                        logger.error(f"Full traceback: {traceback.format_exc()}")
+                        logger.error(f"Session data at time of error: {session}")
                         response_message = "Thank you for providing your information. We'll be in touch soon!"
                         session_manager.set_stage(phone_number, ConversationStage.ERROR)
                 else:
                     response_message = result["message"]
 
             except Exception as e:
-                logger.error(f"Error processing response for {phone_number}: {e}")
-                traceback.print_exc()
+                logger.error(f"❌ Error processing response for {phone_number}: {e}")
+                logger.error(f"Full traceback: {traceback.format_exc()}")
                 response_message = "I didn't quite understand that. Could you please try again?"
 
         # Add assistant message to session
@@ -527,7 +535,10 @@ async def sms_webhook(From: str = Form(...), Body: str = Form(...)):
 
 async def save_conversation_to_sheets(phone_number: str, session: Dict):
     """Save completed conversation to Google Sheets"""
+    logger.info(f"📝 save_conversation_to_sheets called for {phone_number}")
+
     answers = session.get("answers", {})
+    logger.info(f"📋 Found {len(answers)} answers in session")
 
     # Map answers to ClientData format
     client_data = ClientData(
@@ -549,9 +560,13 @@ async def save_conversation_to_sheets(phone_number: str, session: Dict):
         emergency_contact_phone=answers.get("emergency_contact_phone", ""),
         conversation_stage="completed"
     )
+    logger.info(f"✅ ClientData object created successfully")
 
     # Use existing create_client endpoint logic
+    logger.info(f"🔗 Connecting to Google Sheets...")
     sheet = get_worksheet()
+    logger.info(f"✅ Connected to worksheet: Main Validation Sheet")
+
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     row_data = [
@@ -578,8 +593,11 @@ async def save_conversation_to_sheets(phone_number: str, session: Dict):
         client_data.conversation_stage or "completed"
     ]
 
+    logger.info(f"📤 Appending row with {len(row_data)} columns...")
+    logger.info(f"Row preview: Name={client_data.full_name}, Email={client_data.email}, Phone={phone_number}")
+
     sheet.append_row(row_data)
-    logger.info(f"Saved conversation for {phone_number} to Google Sheets")
+    logger.info(f"✅ Successfully appended row to Google Sheets for {phone_number}")
 
 
 @app.post("/api/web-form-submit", response_model=ClientResponse)
