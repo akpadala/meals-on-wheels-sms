@@ -223,7 +223,7 @@ async def create_client(client: ClientData):
         # Get current timestamp
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # Prepare row data matching exact sheet column order
+        # Prepare row data matching exact sheet column order (17 columns)
         row_data = [
             timestamp,                              # Column 1: Timestamp
             client.full_name,                       # Column 2: Full Name
@@ -241,11 +241,7 @@ async def create_client(client: ClientData):
             client.pet_details or "",               # Column 14: Pet Details
             client.has_weapons,                     # Column 15: Has Weapons
             client.emergency_contact_name,          # Column 16: Emergency Contact Name
-            client.emergency_contact_phone,         # Column 17: Emergency Contact Phone
-            client.language_preference or "English", # Column 18: Language Preference
-            client.eligibility_status or "pending",  # Column 19: Eligibility Status
-            client.notes or "",                     # Column 20: Notes
-            client.conversation_stage or "new"      # Column 21: Conversation Stage
+            client.emergency_contact_phone          # Column 17: Emergency Contact Phone
         ]
         
         # Append to sheet
@@ -569,6 +565,7 @@ async def save_conversation_to_sheets(phone_number: str, session: Dict):
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    # Only include columns that exist in the sheet (17 columns)
     row_data = [
         timestamp,
         client_data.full_name,
@@ -586,14 +583,10 @@ async def save_conversation_to_sheets(phone_number: str, session: Dict):
         client_data.pet_details or "",
         client_data.has_weapons,
         client_data.emergency_contact_name,
-        client_data.emergency_contact_phone,
-        client_data.language_preference or "English",
-        client_data.eligibility_status or "pending",
-        client_data.notes or "",
-        client_data.conversation_stage or "completed"
+        client_data.emergency_contact_phone
     ]
 
-    logger.info(f"📤 Appending row with {len(row_data)} columns...")
+    logger.info(f"📤 Appending row with {len(row_data)} columns (matching sheet structure)...")
     logger.info(f"Row preview: Name={client_data.full_name}, Email={client_data.email}, Phone={phone_number}")
 
     sheet.append_row(row_data)
