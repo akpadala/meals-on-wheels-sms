@@ -243,9 +243,11 @@ async def create_client(client: ClientData):
             client.emergency_contact_name,          # Column 16: Emergency Contact Name
             client.emergency_contact_phone          # Column 17: Emergency Contact Phone
         ]
-        
-        # Append to sheet
-        sheet.append_row(row_data)
+
+        # Write to specific range to avoid horizontal spreading
+        next_row = len(sheet.get_all_values()) + 1
+        range_to_update = f"A{next_row}:Q{next_row}"  # Q is column 17
+        sheet.update(range_to_update, [row_data], value_input_option='RAW')
         
         return ClientResponse(
             success=True,
@@ -589,8 +591,12 @@ async def save_conversation_to_sheets(phone_number: str, session: Dict):
     logger.info(f"📤 Appending row with {len(row_data)} columns (matching sheet structure)...")
     logger.info(f"Row preview: Name={client_data.full_name}, Email={client_data.email}, Phone={phone_number}")
 
-    sheet.append_row(row_data)
-    logger.info(f"✅ Successfully appended row to Google Sheets for {phone_number}")
+    # Find next empty row and write to columns A-Q to avoid horizontal spreading
+    next_row = len(sheet.get_all_values()) + 1
+    range_to_update = f"A{next_row}:Q{next_row}"  # Q is column 17
+    logger.info(f"📍 Writing to range: {range_to_update}")
+    sheet.update(range_to_update, [row_data], value_input_option='RAW')
+    logger.info(f"✅ Successfully wrote row to Google Sheets for {phone_number} at {range_to_update}")
 
 
 @app.post("/api/web-form-submit", response_model=ClientResponse)
