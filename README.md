@@ -1,3 +1,12 @@
+## My Contribution
+
+This was a collaborative team project to build an SMS-based system for Meals on Wheels.
+
+My work included:
+- Developing backend logic
+- Working with APIs to support SMS messaging workflows
+- Testing and debugging functionality within the shared codebase
+
 # Meals on Wheels SMS Intake System
 
 An AI-powered SMS intake system for Meals on Wheels Orange County. Clients text in, answer a few questions through natural conversation, and their info is automatically saved to Google Sheets.
